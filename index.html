@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>SMJ Admin</title>
+    <meta name="theme-color" content="#B8860B" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gold: '#D4AF37',
+              'dark-gold': '#B8860B',
+              cream: '#FFFDF8',
+            },
+            fontFamily: {
+              heading: ['"Playfair Display"', 'serif'],
+              body: ['"Inter"', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+
+    <!-- React & ReactDOM (UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+    <!-- PWA Manifest -->
+    <script>
+      const manifest = {
+        "name": "Shri Murari Admin",
+        "short_name": "SMJ Admin",
+        "start_url": ".",
+        "display": "standalone",
+        "background_color": "#FFFDF8",
+        "theme_color": "#B8860B",
+        "icons": [
+          {
+            "src": "https://cdn-icons-png.flaticon.com/512/2503/2503507.png",
+            "sizes": "192x192",
+            "type": "image/png"
+          },
+          {
+            "src": "https://cdn-icons-png.flaticon.com/512/2503/2503507.png",
+            "sizes": "512x512",
+            "type": "image/png"
+          }
+        ]
+      };
+      const content = encodeURIComponent(JSON.stringify(manifest));
+      const url = "data:application/manifest+json," + content;
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = url;
+      document.head.appendChild(link);
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-cream text-gray-800 antialiased min-h-screen flex flex-col">
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      // --- Firebase Config ---
+      const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "shrimurarirate.firebaseapp.com",
+        databaseURL: "https://shrimurarirate-default-rtdb.firebaseio.com",
+        projectId: "shrimurarirate",
+        storageBucket: "shrimurarirate.appspot.com",
+        messagingSenderId: "87052333093",
+        appId: "YOUR_APP_ID"
+      };
+
+      // Initialize Firebase
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      const db = firebase.database();
+
+      // --- Components ---
+
+      const LoadingSpinner = () => (
+        <svg className="animate-spin h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      );
+
+      const Button = ({ children, isLoading, onClick, className = "", type = "button" }) => (
+        <button 
+          type={type}
+          onClick={onClick}
+          disabled={isLoading}
+          className={`w-full py-3 px-4 rounded-xl font-semibold shadow-md transition-all duration-300 flex justify-center items-center transform active:scale-[0.98] bg-gradient-to-r from-dark-gold to-gold text-white hover:shadow-lg ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${className}`}
+        >
+          {isLoading ? <LoadingSpinner /> : children}
+        </button>
+      );
+
+      const Input = ({ label, type = "text", value, onChange, placeholder, name }) => (
+        <div className="w-full">
+          <label className="block text-sm font-medium text-gray-600 mb-1.5 ml-1">
+            {label}
+          </label>
+          <input
+            name={name}
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            className="w-full px-4 py-3 rounded-xl border-2 bg-white text-gray-900 placeholder-gray-400 border-gray-200 focus:border-gold focus:ring-2 focus:ring-amber-100 outline-none transition-all duration-200"
+          />
+        </div>
+      );
+
+      // --- Login Screen ---
+      const LoginScreen = ({ onAuthenticated }) => {
+        const [pin, setPin] = useState('');
+        const [error, setError] = useState('');
+        const [shaking, setShaking] = useState(false);
+
+        const handleNumberClick = (num) => {
+          if (pin.length < 4) {
+            setPin(prev => {
+              const newPin = prev + num;
+              if (newPin.length === 4) {
+                setTimeout(() => validatePin(newPin), 100);
+              }
+              return newPin;
+            });
+            setError('');
+          }
+        };
+
+        const validatePin = (inputPin) => {
+          if (inputPin === "5555") {
+            onAuthenticated();
+          } else {
+            setError('Incorrect PIN');
+            setShaking(true);
+            setPin('');
+            setTimeout(() => setShaking(false), 500);
+          }
+        };
+
+        const handleDelete = () => {
+          setPin(prev => prev.slice(0, -1));
+          setError('');
+        };
+
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-cream">
+            <div className="w-full max-w-sm">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-dark-gold rounded-full mx-auto flex items-center justify-center mb-4 shadow-lg shadow-amber-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-white">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                </div>
+                <h1 className="text-3xl font-heading font-bold text-gray-900 mb-2">Admin Access</h1>
+                <p className="text-gray-500">Enter PIN to update rates</p>
+              </div>
+
+              <div className={`bg-white rounded-3xl shadow-xl p-6 transition-transform duration-100 ${shaking ? 'translate-x-[-5px]' : ''} ${shaking ? 'translate-x-[5px]' : ''}`}>
+                <div className="flex justify-center gap-4 mb-8">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className={`w-4 h-4 rounded-full transition-all duration-200 ${pin.length > i ? 'bg-dark-gold scale-110' : 'bg-gray-200'}`} />
+                  ))}
+                </div>
+
+                {error && (
+                  <div className="text-red-500 text-center text-sm mb-4 font-medium animate-pulse">
+                    {error}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => handleNumberClick(num.toString())}
+                      className="h-14 rounded-2xl bg-gray-50 hover:bg-amber-50 text-xl font-semibold text-gray-700 active:bg-amber-100 transition-colors select-none"
+                    >
+                      {num}
+                    </button>
+                  ))}
+                  <div className="col-span-1"></div>
+                  <button
+                    onClick={() => handleNumberClick('0')}
+                    className="h-14 rounded-2xl bg-gray-50 hover:bg-amber-50 text-xl font-semibold text-gray-700 active:bg-amber-100 transition-colors select-none"
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="h-14 rounded-2xl bg-gray-50 hover:bg-red-50 text-xl font-semibold text-gray-700 flex items-center justify-center active:bg-red-100 transition-colors select-none"
+                  >
+                    ⌫
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Dashboard ---
+      const Dashboard = ({ onLogout }) => {
+        const [rates, setRates] = useState({ rate24k: '', rate22k: '', rate18k: '' });
+        const [loading, setLoading] = useState(true);
+        const [updating, setUpdating] = useState(false);
+        const [message, setMessage] = useState(null);
+
+        useEffect(() => {
+          const ratesRef = db.ref('rates');
+          ratesRef.once('value').then((snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+              setRates({
+                rate24k: data.rate24k || '',
+                rate22k: data.rate22k || '',
+                rate18k: data.rate18k || ''
+              });
+            }
+            setLoading(false);
+          }).catch(err => {
+            console.error(err);
+            setLoading(false);
+            setMessage({ type: 'error', text: 'Failed to load rates' });
+          });
+        }, []);
+
+        const handleUpdate = (e) => {
+          e.preventDefault();
+          setUpdating(true);
+          setMessage(null);
+
+          const updates = {
+            rate24k: Number(rates.rate24k),
+            rate22k: Number(rates.rate22k),
+            rate18k: Number(rates.rate18k)
+          };
+
+          db.ref('rates').set(updates)
+            .then(() => {
+              setMessage({ type: 'success', text: 'Rates updated successfully!' });
+              setTimeout(() => setMessage(null), 3000);
+            })
+            .catch((err) => {
+              console.error(err);
+              setMessage({ type: 'error', text: 'Update failed. Try again.' });
+            })
+            .finally(() => {
+              setUpdating(false);
+            });
+        };
+
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setRates(prev => ({ ...prev, [name]: value }));
+        };
+
+        return (
+          <div className="min-h-screen bg-cream flex flex-col">
+            <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+              <div>
+                <h2 className="font-heading font-bold text-xl text-dark-gold">SMJ Admin</h2>
+                <p className="text-xs text-gray-500">Rate Management</p>
+              </div>
+              <button onClick={onLogout} className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors">
+                Logout
+              </button>
+            </header>
+
+            <main className="flex-grow p-6 max-w-md mx-auto w-full">
+              <div className="bg-white rounded-3xl shadow-lg p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-6 text-gray-800 border-l-4 border-gold pl-3">Update Today's Rates</h3>
+                
+                {loading ? (
+                  <div className="space-y-4 animate-pulse">
+                    <div className="h-12 bg-gray-100 rounded-xl"></div>
+                    <div className="h-12 bg-gray-100 rounded-xl"></div>
+                    <div className="h-12 bg-gray-100 rounded-xl"></div>
+                    <div className="h-12 bg-gray-200 rounded-xl w-1/2 mx-auto mt-6"></div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleUpdate} className="space-y-5">
+                    <Input
+                      label="24 Karat Rate (₹/gm)"
+                      type="number"
+                      name="rate24k"
+                      value={rates.rate24k}
+                      onChange={handleChange}
+                      placeholder="e.g. 7200"
+                    />
+                    <Input
+                      label="22 Karat Rate (₹/gm)"
+                      type="number"
+                      name="rate22k"
+                      value={rates.rate22k}
+                      onChange={handleChange}
+                      placeholder="e.g. 6800"
+                    />
+                    <Input
+                      label="18 Karat Rate (₹/gm)"
+                      type="number"
+                      name="rate18k"
+                      value={rates.rate18k}
+                      onChange={handleChange}
+                      placeholder="e.g. 5600"
+                    />
+
+                    <div className="pt-2">
+                      <Button type="submit" isLoading={updating}>
+                        Update All Rates
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {message && (
+                <div className={`mt-6 p-4 rounded-xl text-center font-medium shadow-md transform transition-all duration-300 animate-fade-in ${
+                  message.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {message.text}
+                </div>
+              )}
+            </main>
+            
+            <footer className="p-4 text-center text-xs text-gray-400">
+              &copy; {new Date().getFullYear()} Shri Murari Jewellers
+            </footer>
+          </div>
+        );
+      };
+
+      // --- Main App ---
+      const App = () => {
+        const [isAuthenticated, setIsAuthenticated] = useState(false);
+        const [isLoading, setIsLoading] = useState(true);
+
+        useEffect(() => {
+          const session = localStorage.getItem('smj_admin_session');
+          if (session === 'valid') {
+            setIsAuthenticated(true);
+          }
+          setIsLoading(false);
+        }, []);
+
+        const handleLogin = () => {
+          localStorage.setItem('smj_admin_session', 'valid');
+          setIsAuthenticated(true);
+        };
+
+        const handleLogout = () => {
+          localStorage.removeItem('smj_admin_session');
+          setIsAuthenticated(false);
+        };
+
+        if (isLoading) {
+          return (
+            <div className="min-h-screen bg-cream flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-gold border-t-transparent"></div>
+            </div>
+          );
+        }
+
+        return isAuthenticated ? (
+          <Dashboard onLogout={handleLogout} />
+        ) : (
+          <LoginScreen onAuthenticated={handleLogin} />
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+
+    <!-- Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        const swContent = `
+          self.addEventListener('install', (e) => self.skipWaiting());
+          self.addEventListener('activate', (e) => self.clients.claim());
+          self.addEventListener('fetch', (e) => {});
+        `;
+        const blob = new Blob([swContent], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(url)
+          .then(() => console.log('SW registered'))
+          .catch(err => console.log('SW error', err));
+      }
+    </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
